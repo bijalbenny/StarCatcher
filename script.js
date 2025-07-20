@@ -377,7 +377,7 @@ function updateStars() {
         } else if (item.y > canvas.height) {
             // Item missed the catcher and went off-screen
             // Only lose a life if a star is missed. Bombs and power-ups falling off-screen do not reduce lives.
-            if (gameRunning && (item.type === 'star')) { // Corrected condition
+            if (gameRunning && (item.type === 'star')) {
                 if (lives > 0) {
                     lives = Math.max(0, lives - 1); // Ensure lives don't go below 0
                     livesDisplay.textContent = lives;
@@ -481,29 +481,24 @@ function resetGame() {
 // --- Gemini API Integration ---
 async function callGeminiAPI(prompt, successCallback, errorCallback) {
     showMessage("Loading... <span class='loading-spinner'></span>");
-    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-    const payload = { contents: chatHistory };
-    const apiKey = ""; // Canvas will provide this in runtime
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    // This is the endpoint for your Netlify Function
+    const apiUrl = '/.netlify/functions/gemini-proxy'; 
 
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ prompt: prompt }) // Send the prompt to your function
         });
         const result = await response.json();
 
-        if (result.candidates && result.candidates.length > 0 &&
-            result.candidates[0].content && result.candidates[0].content.parts &&
-            result.candidates[0].content.parts.length > 0) {
-            const text = result.candidates[0].content.parts[0].text;
-            successCallback(text);
+        if (response.ok) { // Check if the function call was successful (status 200)
+            successCallback(result.text); // Access the 'text' property from your function's response
         } else {
-            errorCallback("Failed to get a response from Gemini.");
+            errorCallback(result.error || "An unknown error occurred from the serverless function.");
         }
     } catch (error) {
-        console.error("Error calling Gemini API:", error);
+        console.error("Error calling Netlify Function:", error);
         errorCallback("Error fetching data. Please try again.");
     }
 }
