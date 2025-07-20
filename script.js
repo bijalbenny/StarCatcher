@@ -12,12 +12,14 @@ const messageBox = document.getElementById('message-box');
 const getEncouragementButton = document.getElementById('getEncouragementButton');
 const getStarFactButton = document.getElementById('getStarFactButton');
 
+const highScoreDisplay = document.getElementById('highScoreDisplay');
+
 // Game state variables
 let gameRunning = false;
-let gamePaused = false; // Game will always be paused when not running
 let score = 0;
 let lives = 3;
 let animationFrameId; // To store the requestAnimationFrame ID
+let highScore = localStorage.getItem('starCatcherHighScore') || 0; // Load high score from local storage
 
 // Catcher properties
 const catcher = {
@@ -27,18 +29,24 @@ const catcher = {
     height: 20,
     dx: 0,
     speed: parseInt(catcherSpeedSlider.value),
-    originalWidth: 100
+    originalWidth: 100,
+    originalColor: '#A0522D', // Sienna color for basket
+    powerUpColor: '#FF4500' // Orange-red for mega catcher power-up state
 };
 
 // Stars array
 let stars = [];
-let starFallSpeed = parseInt(starSpeedSlider.value);
+let originalStarFallSpeed = parseInt(starSpeedSlider.value); // Store original speed
+let currentStarFallSpeed = originalStarFallSpeed; // Current falling speed, can be modified by power-ups
 const starSpawnInterval = 1000; // Time in ms between new star spawns
 let lastStarSpawnTime = 0;
 
-// Power-up state
+// Power-up states
 let megaCatcherTimeoutId = null;
 const megaCatcherDuration = 5000; // 5 seconds
+let timeSlowdownTimeoutId = null; // New: Timeout for time slowdown power-up
+const timeSlowdownDuration = 7000; // 7 seconds for slowdown effect
+const slowdownFactor = 0.3; // Stars will fall at 30% of their original speed
 
 // Tone.js Synths for sound effects, initialized once
 let starCatchSynth;
@@ -68,19 +76,28 @@ function initGame() {
     stars = []; // Clear all falling items
     catcher.width = catcher.originalWidth; // Reset catcher width
     catcher.dx = 0; // Stop catcher movement
-    
+    catcher.color = catcher.originalColor; // Reset catcher color
+
+    // Reset star fall speed
+    currentStarFallSpeed = originalStarFallSpeed;
+
     // Clear any active power-up timeouts
     if (megaCatcherTimeoutId) {
         clearTimeout(megaCatcherTimeoutId);
         megaCatcherTimeoutId = null;
     }
+    if (timeSlowdownTimeoutId) { // Clear time slowdown timeout
+        clearTimeout(timeSlowdownTimeoutId);
+        timeSlowdownTimeoutId = null;
+    }
 
     gameRunning = false;
-    gamePaused = false; // Ensure game is paused when initialized
     scoreDisplay.textContent = score;
     livesDisplay.textContent = lives;
+    highScoreDisplay.textContent = highScore; // Display high score
     startButton.textContent = 'Start Game'; // Ensure button text is 'Start Game'
-    showMessage("Press 'Start Game' to begin! Use Left/Right arrow keys to move.");
+
+    showMessage("Press 'Start Game' to begin! Use Left/Right arrow keys or swipe to move.");
     draw(); // Redraw initial empty state
 
     // Reset last spawn time to ensure a delay before the first item appears
@@ -112,7 +129,7 @@ function drawCatcher() {
     ctx.arc(catcher.x + basketWidth - cornerRadius, catcher.y + basketHeight - cornerRadius, cornerRadius, 0, Math.PI / 2);
     ctx.closePath();
 
-    ctx.fillStyle = '#A0522D'; // Sienna color for basket
+    ctx.fillStyle = catcher.color; // Use catcher's current color
     ctx.fill();
     ctx.strokeStyle = '#8B4513'; // SaddleBrown for border
     ctx.lineWidth = 2;
@@ -199,6 +216,51 @@ function drawPowerUpStar(powerup) {
     ctx.fillText('P', powerup.x, powerup.y);
 }
 
+// Draw Time Slowdown power-up
+function drawTimeSlowdown(item) {
+    ctx.beginPath();
+    const size = item.size;
+    const x = item.x;
+    const y = item.y;
+
+    // Draw a gear/cog shape
+    ctx.fillStyle = '#1ABC9C'; // Turquoise color
+    ctx.strokeStyle = '#16A085'; // Darker turquoise
+    ctx.lineWidth = 2;
+
+    const numTeeth = 8;
+    const toothWidthAngle = Math.PI / (numTeeth * 1.5);
+    const toothDepth = size * 0.15;
+
+    for (let i = 0; i < numTeeth; i++) {
+        const angle = (i * Math.PI * 2 / numTeeth);
+        const outerX = x + size / 2 * Math.cos(angle);
+        const outerY = y + size / 2 * Math.sin(angle);
+        const innerX = x + (size / 2 - toothDepth) * Math.cos(angle + toothWidthAngle / 2);
+        const innerY = y + (size / 2 - toothDepth) * Math.sin(angle + toothWidthAngle / 2);
+
+        if (i === 0) {
+            ctx.moveTo(outerX, outerY);
+        } else {
+            ctx.lineTo(outerX, outerY);
+        }
+        ctx.lineTo(innerX, innerY);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw a small clock hand/arrow in the center
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + size * 0.2, y - size * 0.2);
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.closePath();
+}
+
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
     drawCatcher();
@@ -209,6 +271,8 @@ function draw() {
             drawBomb(item);
         } else if (item.type === 'powerup') {
             drawPowerUpStar(item);
+        } else if (item.type === 'timeslowdown') {
+            drawTimeSlowdown(item);
         }
     });
 }
@@ -251,14 +315,16 @@ function showFloatingFeedback(x, y, text, type) {
 function updateStars() {
     const currentTime = Date.now();
 
-    // Spawn new elements (stars, bombs, power-ups)
-    if (currentTime - lastStarSpawnTime > starSpawnInterval && gameRunning && !gamePaused) {
+    // Spawn new elements (stars, bombs, power-ups, time slowdowns)
+    if (currentTime - lastStarSpawnTime > starSpawnInterval && gameRunning) {
         const randomVal = Math.random();
         let type = 'star';
         if (randomVal < 0.15) { // 15% chance for bomb
             type = 'bomb';
-        } else if (randomVal < 0.20) { // 5% chance for power-up (total 20%)
+        } else if (randomVal < 0.20) { // 5% chance for mega catcher power-up
             type = 'powerup';
+        } else if (randomVal < 0.25) { // 5% chance for time slowdown (total 25%)
+            type = 'timeslowdown';
         }
 
         stars.push({
@@ -273,7 +339,7 @@ function updateStars() {
     // Move and check elements
     for (let i = stars.length - 1; i >= 0; i--) {
         const item = stars[i];
-        item.y += starFallSpeed;
+        item.y += currentStarFallSpeed; // Use currentStarFallSpeed for movement
 
         // Check for collision with catcher
         if (
@@ -302,11 +368,16 @@ function updateStars() {
                 activateMegaCatcher();
                 starCatchSynth.triggerAttackRelease("E6", "8n");
                 showFloatingFeedback(item.x, item.y, 'MEGA CATCHER!', 'positive');
+            } else if (item.type === 'timeslowdown') {
+                activateTimeSlowdown();
+                starCatchSynth.triggerAttackRelease("A5", "8n");
+                showFloatingFeedback(item.x, item.y, 'TIME SLOW!', 'positive');
             }
             stars.splice(i, 1); // Remove caught item
         } else if (item.y > canvas.height) {
             // Item missed the catcher and went off-screen
-            if (gameRunning && (item.type === 'star' || item.type === 'powerup')) {
+            // Only lose a life if a star is missed. Bombs falling off-screen do not reduce lives.
+            if (gameRunning && (item.type === 'star')) { // Modified condition
                 if (lives > 0) {
                     lives = Math.max(0, lives - 1); // Ensure lives don't go below 0
                     livesDisplay.textContent = lives;
@@ -329,6 +400,7 @@ function activateMegaCatcher() {
         clearTimeout(megaCatcherTimeoutId);
     }
     catcher.width = catcher.originalWidth * 1.5; // Increase catcher width
+    catcher.color = catcher.powerUpColor; // Change catcher color
     // Ensure catcher stays within bounds after resizing
     if (catcher.x + catcher.width > canvas.width) {
         catcher.x = canvas.width - catcher.width;
@@ -336,13 +408,30 @@ function activateMegaCatcher() {
 
     megaCatcherTimeoutId = setTimeout(() => {
         catcher.width = catcher.originalWidth; // Reset to original width
+        catcher.color = catcher.originalColor; // Reset catcher color
         megaCatcherTimeoutId = null;
     }, megaCatcherDuration);
 }
 
+// Activate Time Slowdown
+function activateTimeSlowdown() {
+    if (timeSlowdownTimeoutId) {
+        clearTimeout(timeSlowdownTimeoutId);
+    }
+    currentStarFallSpeed = originalStarFallSpeed * slowdownFactor; // Slow down stars
+    catcher.color = '#1ABC9C'; // Change catcher color to indicate slowdown active
+
+    timeSlowdownTimeoutId = setTimeout(() => {
+        currentStarFallSpeed = originalStarFallSpeed; // Revert to original speed
+        catcher.color = catcher.originalColor; // Revert catcher color
+        timeSlowdownTimeoutId = null;
+    }, timeSlowdownDuration);
+}
+
+
 // --- Game Loop ---
 function animate() {
-    if (!gameRunning || gamePaused) {
+    if (!gameRunning) {
         cancelAnimationFrame(animationFrameId);
         return;
     }
@@ -356,13 +445,12 @@ function animate() {
 
 // --- Game State Management ---
 function startGame() {
-    // If the game is already running or paused, it's a restart.
-    if (gameRunning || gamePaused) {
+    // If the game is already running, it's a restart.
+    if (gameRunning) {
         resetGame(); // Fully reset the game state
     }
     
     gameRunning = true;
-    gamePaused = false; // Game is running, so it's not paused
     hideMessage(); // Hide message box when game starts
     startButton.textContent = 'Restart Game'; // Indicate it's a restart option
     animate(); // Start the animation loop
@@ -370,12 +458,21 @@ function startGame() {
 
 function endGame() {
     gameRunning = false;
-    gamePaused = true; // Ensure game is paused when over
     cancelAnimationFrame(animationFrameId);
     gameOverSynth.triggerAttackRelease("C3", "1n");
-    showMessage(`Game Over! Your final score is: ${score}. Press 'Play Again?' to retry.`);
+    
+    // Update high score if current score is greater
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('starCatcherHighScore', highScore);
+        highScoreDisplay.textContent = highScore;
+        showMessage(`Game Over! New High Score: ${score}! Press 'Play Again?' to retry.`);
+    } else {
+        showMessage(`Game Over! Your final score is: ${score}. High Score: ${highScore}. Press 'Play Again?' to retry.`);
+    }
+    
     // Change the text of the start button to ask to play again
-    startButton.textContent = 'Play Again?'; 
+    startButton.textContent = 'Play Again?';
 }
 
 function resetGame() {
@@ -441,12 +538,15 @@ catcherSpeedSlider.addEventListener('input', (event) => {
 });
 
 starSpeedSlider.addEventListener('input', (event) => {
-    starFallSpeed = parseInt(event.target.value);
+    originalStarFallSpeed = parseInt(event.target.value); // Update original speed
+    if (!timeSlowdownTimeoutId) { // Only update current speed if no slowdown is active
+        currentStarFallSpeed = originalStarFallSpeed;
+    }
 });
 
 // Keyboard controls for catcher movement
 document.addEventListener('keydown', (e) => {
-    if (gameRunning && !gamePaused) { // Movement only if game is running and not paused
+    if (gameRunning) {
         if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
             catcher.dx = -catcher.speed;
         } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
@@ -465,7 +565,7 @@ document.addEventListener('keyup', (e) => {
 let initialTouchX = null;
 
 canvas.addEventListener('touchstart', (e) => {
-    if (gameRunning && !gamePaused) {
+    if (gameRunning) {
         initialTouchX = e.touches[0].clientX;
         // Prevent default to avoid scrolling/zooming on touch
         e.preventDefault(); 
@@ -473,19 +573,14 @@ canvas.addEventListener('touchstart', (e) => {
 });
 
 canvas.addEventListener('touchmove', (e) => {
-    if (gameRunning && !gamePaused && initialTouchX !== null) {
+    if (gameRunning && initialTouchX !== null) {
         const currentTouchX = e.touches[0].clientX;
         const deltaX = currentTouchX - initialTouchX;
 
         // Adjust catcher.dx based on swipe direction and speed
-        // A simple scaling factor can be used, or just a direct speed
-        if (deltaX > 0) { // Swiping right
-            catcher.dx = catcher.speed;
-        } else if (deltaX < 0) { // Swiping left
-            catcher.dx = -catcher.speed;
-        } else {
-            catcher.dx = 0;
-        }
+        // Scale deltaX to control sensitivity, and clamp to catcher.speed
+        const sensitivity = 0.5; // Adjust this value to change how fast the catcher moves with a swipe
+        catcher.dx = Math.max(-catcher.speed, Math.min(catcher.speed, deltaX * sensitivity));
         
         // Update initialTouchX for continuous movement
         initialTouchX = currentTouchX;
@@ -494,7 +589,7 @@ canvas.addEventListener('touchmove', (e) => {
 });
 
 canvas.addEventListener('touchend', () => {
-    if (gameRunning && !gamePaused) {
+    if (gameRunning) {
         catcher.dx = 0; // Stop movement when touch ends
         initialTouchX = null;
     }
