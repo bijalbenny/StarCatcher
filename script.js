@@ -12,12 +12,19 @@ const messageBox = document.getElementById('message-box');
 const getEncouragementButton = document.getElementById('getEncouragementButton');
 const getStarFactButton = document.getElementById('getStarFactButton');
 
+// New control elements for enhanced features
+const pauseButton = document.getElementById('pauseButton'); // Assuming this button exists in HTML
+const muteButton = document.getElementById('muteButton');   // Assuming this button exists in HTML
+const volumeSlider = document.getElementById('volumeSlider'); // Assuming this slider exists in HTML
+const highScoreDisplay = document.getElementById('highScoreDisplay'); // Assuming this element exists in HTML
+
 // Game state variables
 let gameRunning = false;
 let gamePaused = false; // Game will always be paused when not running
 let score = 0;
 let lives = 3;
 let animationFrameId; // To store the requestAnimationFrame ID
+let highScore = localStorage.getItem('starCatcherHighScore') || 0; // Load high score from local storage
 
 // Catcher properties
 const catcher = {
@@ -27,7 +34,9 @@ const catcher = {
     height: 20,
     dx: 0,
     speed: parseInt(catcherSpeedSlider.value),
-    originalWidth: 100
+    originalWidth: 100,
+    originalColor: '#A0522D', // Sienna color for basket
+    powerUpColor: '#FF4500' // Orange-red for power-up state
 };
 
 // Stars array
@@ -38,13 +47,16 @@ let lastStarSpawnTime = 0;
 
 // Power-up state
 let megaCatcherTimeoutId = null;
+let lifeBoostTimeoutId = null; // New: Timeout for life boost power-up
 const megaCatcherDuration = 5000; // 5 seconds
+const lifeBoostDuration = 0; // Life boost is instant, no duration needed for the power-up itself
 
 // Tone.js Synths for sound effects, initialized once
 let starCatchSynth;
 let bombHitSynth;
 let gameOverSynth;
 let toneStarted = false;
+let isMuted = false;
 
 // --- Game Initialization and Setup ---
 
@@ -68,19 +80,28 @@ function initGame() {
     stars = []; // Clear all falling items
     catcher.width = catcher.originalWidth; // Reset catcher width
     catcher.dx = 0; // Stop catcher movement
-    
+    catcher.color = catcher.originalColor; // Reset catcher color
+
     // Clear any active power-up timeouts
     if (megaCatcherTimeoutId) {
         clearTimeout(megaCatcherTimeoutId);
         megaCatcherTimeoutId = null;
+    }
+    if (lifeBoostTimeoutId) { // Clear life boost timeout if any
+        clearTimeout(lifeBoostTimeoutId);
+        lifeBoostTimeoutId = null;
     }
 
     gameRunning = false;
     gamePaused = false; // Ensure game is paused when initialized
     scoreDisplay.textContent = score;
     livesDisplay.textContent = lives;
+    highScoreDisplay.textContent = highScore; // Display high score
     startButton.textContent = 'Start Game'; // Ensure button text is 'Start Game'
-    showMessage("Press 'Start Game' to begin! Use Left/Right arrow keys to move.");
+    pauseButton.textContent = 'Pause'; // Reset pause button text
+    pauseButton.disabled = true; // Disable pause button until game starts
+
+    showMessage("Press 'Start Game' to begin! Use Left/Right arrow keys or swipe to move.");
     draw(); // Redraw initial empty state
 
     // Reset last spawn time to ensure a delay before the first item appears
@@ -112,7 +133,7 @@ function drawCatcher() {
     ctx.arc(catcher.x + basketWidth - cornerRadius, catcher.y + basketHeight - cornerRadius, cornerRadius, 0, Math.PI / 2);
     ctx.closePath();
 
-    ctx.fillStyle = '#A0522D'; // Sienna color for basket
+    ctx.fillStyle = catcher.color; // Use catcher's current color
     ctx.fill();
     ctx.strokeStyle = '#8B4513'; // SaddleBrown for border
     ctx.lineWidth = 2;
@@ -199,6 +220,33 @@ function drawPowerUpStar(powerup) {
     ctx.fillText('P', powerup.x, powerup.y);
 }
 
+// New: Draw Life Boost item
+function drawLifeBoost(lifeBoost) {
+    ctx.beginPath();
+    // Draw a heart shape
+    const size = lifeBoost.size;
+    const x = lifeBoost.x;
+    const y = lifeBoost.y;
+
+    ctx.fillStyle = '#FF0000'; // Red color for life boost
+    ctx.strokeStyle = '#CC0000';
+    ctx.lineWidth = 2;
+
+    ctx.moveTo(x, y + size / 4);
+    ctx.bezierCurveTo(x + size / 2, y - size / 2, x + size, y, x, y + size);
+    ctx.bezierCurveTo(x - size, y, x - size / 2, y - size / 2, x, y + size / 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Add a small "+" for clarity
+    ctx.fillStyle = 'white';
+    ctx.font = `${size * 0.6}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('+', x, y + size * 0.2);
+}
+
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
     drawCatcher();
@@ -209,6 +257,8 @@ function draw() {
             drawBomb(item);
         } else if (item.type === 'powerup') {
             drawPowerUpStar(item);
+        } else if (item.type === 'lifeboost') { // New: Draw life boost
+            drawLifeBoost(item);
         }
     });
 }
@@ -251,7 +301,7 @@ function showFloatingFeedback(x, y, text, type) {
 function updateStars() {
     const currentTime = Date.now();
 
-    // Spawn new elements (stars, bombs, power-ups)
+    // Spawn new elements (stars, bombs, power-ups, life boosts)
     if (currentTime - lastStarSpawnTime > starSpawnInterval && gameRunning && !gamePaused) {
         const randomVal = Math.random();
         let type = 'star';
@@ -259,6 +309,8 @@ function updateStars() {
             type = 'bomb';
         } else if (randomVal < 0.20) { // 5% chance for power-up (total 20%)
             type = 'powerup';
+        } else if (randomVal < 0.23) { // New: 3% chance for life boost (total 23%)
+            type = 'lifeboost';
         }
 
         stars.push({
@@ -285,13 +337,13 @@ function updateStars() {
             if (item.type === 'star') {
                 score += 10;
                 scoreDisplay.textContent = score;
-                starCatchSynth.triggerAttackRelease("C5", "8n");
+                if (!isMuted) starCatchSynth.triggerAttackRelease("C5", "8n");
                 showFloatingFeedback(item.x, item.y, '+10', 'positive');
             } else if (item.type === 'bomb') {
                 if (gameRunning && lives > 0) {
                     lives = Math.max(0, lives - 1); // Ensure lives don't go below 0
                     livesDisplay.textContent = lives;
-                    bombHitSynth.triggerAttackRelease("C2", "8n");
+                    if (!isMuted) bombHitSynth.triggerAttackRelease("C2", "8n");
                     showFloatingFeedback(item.x, item.y, '-1 Life', 'negative');
                     if (lives === 0) {
                         endGame();
@@ -300,8 +352,13 @@ function updateStars() {
                 }
             } else if (item.type === 'powerup') {
                 activateMegaCatcher();
-                starCatchSynth.triggerAttackRelease("E6", "8n");
+                if (!isMuted) starCatchSynth.triggerAttackRelease("E6", "8n");
                 showFloatingFeedback(item.x, item.y, 'MEGA CATCHER!', 'positive');
+            } else if (item.type === 'lifeboost') { // New: Handle life boost collision
+                lives += 1;
+                livesDisplay.textContent = lives;
+                if (!isMuted) starCatchSynth.triggerAttackRelease("G5", "8n"); // Different sound for life boost
+                showFloatingFeedback(item.x, item.y, '+1 Life!', 'positive');
             }
             stars.splice(i, 1); // Remove caught item
         } else if (item.y > canvas.height) {
@@ -310,7 +367,7 @@ function updateStars() {
                 if (lives > 0) {
                     lives = Math.max(0, lives - 1); // Ensure lives don't go below 0
                     livesDisplay.textContent = lives;
-                    bombHitSynth.triggerAttackRelease("C3", "8n");
+                    if (!isMuted) bombHitSynth.triggerAttackRelease("C3", "8n");
                     showFloatingFeedback(item.x, item.y, '-1 Life', 'negative');
                 }
             }
@@ -329,6 +386,7 @@ function activateMegaCatcher() {
         clearTimeout(megaCatcherTimeoutId);
     }
     catcher.width = catcher.originalWidth * 1.5; // Increase catcher width
+    catcher.color = catcher.powerUpColor; // Change catcher color
     // Ensure catcher stays within bounds after resizing
     if (catcher.x + catcher.width > canvas.width) {
         catcher.x = canvas.width - catcher.width;
@@ -336,6 +394,7 @@ function activateMegaCatcher() {
 
     megaCatcherTimeoutId = setTimeout(() => {
         catcher.width = catcher.originalWidth; // Reset to original width
+        catcher.color = catcher.originalColor; // Reset catcher color
         megaCatcherTimeoutId = null;
     }, megaCatcherDuration);
 }
@@ -365,6 +424,7 @@ function startGame() {
     gamePaused = false; // Game is running, so it's not paused
     hideMessage(); // Hide message box when game starts
     startButton.textContent = 'Restart Game'; // Indicate it's a restart option
+    pauseButton.disabled = false; // Enable pause button when game starts
     animate(); // Start the animation loop
 }
 
@@ -372,15 +432,38 @@ function endGame() {
     gameRunning = false;
     gamePaused = true; // Ensure game is paused when over
     cancelAnimationFrame(animationFrameId);
-    gameOverSynth.triggerAttackRelease("C3", "1n");
-    showMessage(`Game Over! Your final score is: ${score}. Press 'Play Again?' to retry.`);
+    if (!isMuted) gameOverSynth.triggerAttackRelease("C3", "1n");
+    
+    // Update high score if current score is greater
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('starCatcherHighScore', highScore);
+        highScoreDisplay.textContent = highScore;
+        showMessage(`Game Over! New High Score: ${score}! Press 'Play Again?' to retry.`);
+    } else {
+        showMessage(`Game Over! Your final score is: ${score}. High Score: ${highScore}. Press 'Play Again?' to retry.`);
+    }
+    
     // Change the text of the start button to ask to play again
-    startButton.textContent = 'Play Again?'; 
+    startButton.textContent = 'Play Again?';
+    pauseButton.disabled = true; // Disable pause button when game ends
 }
 
 function resetGame() {
     cancelAnimationFrame(animationFrameId); // Stop any ongoing animation
     initGame(); // Reset all game variables and UI to initial state
+}
+
+function togglePause() {
+    gamePaused = !gamePaused;
+    if (gamePaused) {
+        pauseButton.textContent = 'Resume';
+        showMessage("Game Paused. Press 'Resume' to continue.");
+    } else {
+        pauseButton.textContent = 'Pause';
+        hideMessage();
+        animate(); // Resume animation loop
+    }
 }
 
 // --- Gemini API Integration ---
@@ -435,6 +518,36 @@ function getStarFact() {
 startButton.addEventListener('click', startGame);
 getEncouragementButton.addEventListener('click', getEncouragement);
 getStarFactButton.addEventListener('click', getStarFact);
+pauseButton.addEventListener('click', togglePause); // New: Pause button event listener
+
+// New: Mute/Unmute and Volume Control
+muteButton.addEventListener('click', () => {
+    isMuted = !isMuted;
+    if (isMuted) {
+        Tone.Master.mute = true;
+        muteButton.textContent = 'Unmute 🔇';
+    } else {
+        Tone.Master.mute = false;
+        muteButton.textContent = 'Mute �';
+    }
+});
+
+volumeSlider.addEventListener('input', (event) => {
+    // Tone.js volume is in decibels, so convert from 0-100 range
+    // A linear scale might be too abrupt, so using a logarithmic scale (Tone.db) is better
+    const volume = parseFloat(event.target.value);
+    Tone.Master.volume.value = Tone.gainToDb(volume / 100); // Convert 0-100 to gain, then to dB
+    if (isMuted && volume > 0) { // If muted but volume is increased, unmute
+        isMuted = false;
+        Tone.Master.mute = false;
+        muteButton.textContent = 'Mute 🔊';
+    } else if (!isMuted && volume === 0) { // If not muted but volume is 0, mute
+        isMuted = true;
+        Tone.Master.mute = true;
+        muteButton.textContent = 'Unmute 🔇';
+    }
+});
+
 
 catcherSpeedSlider.addEventListener('input', (event) => {
     catcher.speed = parseInt(event.target.value);
@@ -478,14 +591,9 @@ canvas.addEventListener('touchmove', (e) => {
         const deltaX = currentTouchX - initialTouchX;
 
         // Adjust catcher.dx based on swipe direction and speed
-        // A simple scaling factor can be used, or just a direct speed
-        if (deltaX > 0) { // Swiping right
-            catcher.dx = catcher.speed;
-        } else if (deltaX < 0) { // Swiping left
-            catcher.dx = -catcher.speed;
-        } else {
-            catcher.dx = 0;
-        }
+        // Scale deltaX to control sensitivity, and clamp to catcher.speed
+        const sensitivity = 0.5; // Adjust this value to change how fast the catcher moves with a swipe
+        catcher.dx = Math.max(-catcher.speed, Math.min(catcher.speed, deltaX * sensitivity));
         
         // Update initialTouchX for continuous movement
         initialTouchX = currentTouchX;
@@ -520,6 +628,9 @@ window.onload = function() {
     bombHitSynth = new Tone.MembraneSynth().toDestination();
     gameOverSynth = new Tone.Synth().toDestination();
 
+    // Set initial volume for Tone.js (0 to 100 for slider, converted to dB)
+    Tone.Master.volume.value = Tone.gainToDb(volumeSlider.value / 100);
+
     // Start Tone.js context on first user interaction to avoid browser autoplay policy issues
     document.body.addEventListener('click', () => {
         if (!toneStarted) {
@@ -530,3 +641,4 @@ window.onload = function() {
 };
 
 window.addEventListener('resize', setCanvasDimensions);
+�
