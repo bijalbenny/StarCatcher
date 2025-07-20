@@ -388,7 +388,7 @@ async function callGeminiAPI(prompt, successCallback, errorCallback) {
     showMessage("Loading... <span class='loading-spinner'></span>");
     const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
     const payload = { contents: chatHistory };
-    const apiKey = "AIzaSyC1lEBZqfAy3duL5TGJX-JZgfVPqyoODyY"; 
+    const apiKey = ""; // Canvas will provide this in runtime
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     try {
@@ -460,6 +460,46 @@ document.addEventListener('keyup', (e) => {
         catcher.dx = 0; // Stop movement when key is released
     }
 });
+
+// Touch controls for catcher movement
+let initialTouchX = null;
+
+canvas.addEventListener('touchstart', (e) => {
+    if (gameRunning && !gamePaused) {
+        initialTouchX = e.touches[0].clientX;
+        // Prevent default to avoid scrolling/zooming on touch
+        e.preventDefault(); 
+    }
+});
+
+canvas.addEventListener('touchmove', (e) => {
+    if (gameRunning && !gamePaused && initialTouchX !== null) {
+        const currentTouchX = e.touches[0].clientX;
+        const deltaX = currentTouchX - initialTouchX;
+
+        // Adjust catcher.dx based on swipe direction and speed
+        // A simple scaling factor can be used, or just a direct speed
+        if (deltaX > 0) { // Swiping right
+            catcher.dx = catcher.speed;
+        } else if (deltaX < 0) { // Swiping left
+            catcher.dx = -catcher.speed;
+        } else {
+            catcher.dx = 0;
+        }
+        
+        // Update initialTouchX for continuous movement
+        initialTouchX = currentTouchX;
+        e.preventDefault(); // Prevent default to avoid scrolling/zooming on touch
+    }
+});
+
+canvas.addEventListener('touchend', () => {
+    if (gameRunning && !gamePaused) {
+        catcher.dx = 0; // Stop movement when touch ends
+        initialTouchX = null;
+    }
+});
+
 
 // --- Message Box Functions (for alerts/prompts) ---
 function showMessage(msg) {
