@@ -12,7 +12,7 @@ const messageBox = document.getElementById('message-box');
 const getEncouragementButton = document.getElementById('getEncouragementButton');
 const getStarFactButton = document.getElementById('getStarFactButton');
 
-const highScoreDisplay = document.getElementById('highScoreDisplay');
+const highScoreDisplay = document.getElementById('highScoreDisplay'); // This remains as it's still in HTML
 
 // Game state variables
 let gameRunning = false;
@@ -446,7 +446,7 @@ function animate() {
 // --- Game State Management ---
 function startGame() {
     // Always reset the game state when starting a new game or playing again
-    resetGame(); 
+    resetGame();
     
     gameRunning = true;
     hideMessage(); // Hide message box when game starts
@@ -477,48 +477,47 @@ function resetGame() {
     cancelAnimationFrame(animationFrameId); // Stop any ongoing animation
     initGame(); // Reset all game variables and UI to initial state
 }
+//we can use api also for this
+// --- Local Data for Encouragement and Star Facts ---
+const encouragementMessages = [
+    "You're doing great! Keep catching those stars!",
+    "Amazing effort! Every star counts!",
+    "Fantastic job! You're a star catcher!",
+    "Don't give up! You're getting better with every try!",
+    "Wow! Look at that score climb! Keep it up!",
+    "Super work! The stars are waiting for you!",
+    "You're a shining star! Keep going!",
+    "Every catch makes you stronger!",
+    "Believe in yourself, you can do it!",
+    "Keep your eyes on the prize and catch them all!",
+    "You're on fire! Don't let any stars escape!"
+];
 
-// --- Gemini API Integration ---
-async function callGeminiAPI(prompt, successCallback, errorCallback) {
-    showMessage("Loading... <span class='loading-spinner'></span>");
-    // This is the endpoint for your Netlify Function
-    const apiUrl = '/.netlify/functions/gemini-proxy'; 
+const starFacts = [
+    "Stars are massive balls of hot gases, primarily hydrogen and helium, that produce light and heat through nuclear fusion.",
+    "The Sun is a star, and it’s the closest one to Earth, providing energy essential for life.",
+    "Stars form in nebulae, which are vast clouds of gas and dust in space.",
+    "Nuclear fusion in a star’s core converts hydrogen into helium, releasing enormous amounts of energy.",
+    "Stars vary in size, temperature, and brightness, and are classified by spectral types (O, B, A, F, G, K, M).",
+    "The color of a star indicates its temperature — blue stars are hottest, red stars are coolest.",
+    "Stars have life cycles, evolving from protostars to main-sequence stars, and then to giants, white dwarfs, neutron stars, or black holes depending on their mass.",
+    "Constellations are patterns of stars observed from Earth, used in navigation and storytelling.",
+    "Stars are incredibly far away, so we see them as they were in the past due to the time it takes light to reach us."
+];
 
-    try {
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: prompt }) // Send the prompt to your function
-        });
-        const result = await response.json();
-
-        if (response.ok) { // Check if the function call was successful (status 200)
-            successCallback(result.text); // Access the 'text' property from your function's response
-        } else {
-            errorCallback(result.error || "An unknown error occurred from the serverless function.");
-        }
-    } catch (error) {
-        console.error("Error calling Netlify Function:", error);
-        errorCallback("Error fetching data. Please try again.");
-    }
-}
-
+// --- Functions to get local info (replacing Gemini API calls) ---
 function getEncouragement() {
-    const prompt = `Generate a short, encouraging message for a child who is playing a star-catching game. The message should be positive, simple, and congratulate them on their effort or score. Keep it under 20 words. Current score: ${score}.`;
-    callGeminiAPI(prompt, (msg) => {
-        showMessage(`✨ ${msg}`);
-    }, (error) => {
-        showMessage(`Error: ${error}`);
-    });
+    // Shuffle the array to ensure random order each time
+    const shuffledEncouragement = [...encouragementMessages].sort(() => Math.random() - 0.5);
+    const randomIndex = Math.floor(Math.random() * shuffledEncouragement.length);
+    showMessage(`✨ ${shuffledEncouragement[randomIndex]}`);
 }
 
 function getStarFact() {
-    const prompt = "Generate a very simple and interesting fact about stars or space, suitable for a child. Keep it under 15 words.";
-    callGeminiAPI(prompt, (fact) => {
-        showMessage(`✨ Did you know? ${fact}`);
-    }, (error) => {
-        showMessage(`Error: ${error}`);
-    });
+    // Shuffle the array to ensure random order each time
+    const shuffledFacts = [...starFacts].sort(() => Math.random() - 0.5);
+    const randomIndex = Math.floor(Math.random() * shuffledFacts.length);
+    showMessage(`✨ Did you know? ${shuffledFacts[randomIndex]}`);
 }
 
 // --- Event Listeners ---
