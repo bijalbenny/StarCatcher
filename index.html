@@ -27,6 +27,7 @@
             max-width: 800px; /* Max width for desktop */
             height: auto; /* Maintain aspect ratio */
             aspect-ratio: 4/3; /* Standard game aspect ratio */
+            touch-action: manipulation; /* Prevent default touch actions like double-tap zoom */
         }
         .game-container {
             display: flex;
@@ -46,7 +47,6 @@
             justify-content: center;
             align-items: center;
         }
-        /* START Button Styles Optimization for better text fit and aesthetics */
         button {
             padding: 0.9rem 2rem; /* Increased padding */
             border-radius: 1rem; /* More rounded corners */
@@ -88,8 +88,6 @@
             background-color: #7D3C98;
             background-image: linear-gradient(to bottom right, #7D3C98, #8E44AD);
         }
-        /* END Button Styles Optimization */
-
         input[type="range"] {
             -webkit-appearance: none;
             width: 100px; /* Fixed width for sliders */
@@ -639,6 +637,45 @@
                 catcher.dx = 0; // Stop movement when key is released
             }
         });
+
+        // --- Touch Controls for Catcher Movement ---
+        // This allows touching the left half of the canvas to move left, right half to move right.
+        // Touch and hold for continuous movement.
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent default touch behavior (like scrolling/zooming)
+            if (gameRunning && !gamePaused) {
+                const canvasRect = canvas.getBoundingClientRect();
+                const touchX = e.touches[0].clientX - canvasRect.left;
+
+                if (touchX < canvas.width / 2) {
+                    catcher.dx = -catcher.speed; // Touch left half of canvas
+                } else {
+                    catcher.dx = catcher.speed; // Touch right half of canvas
+                }
+            }
+        }, { passive: false }); // Use { passive: false } to enable preventDefault
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Prevent scrolling during touch-and-hold movement
+            if (gameRunning && !gamePaused) {
+                const canvasRect = canvas.getBoundingClientRect();
+                const touchX = e.touches[0].clientX - canvasRect.left;
+
+                if (touchX < canvas.width / 2) {
+                    catcher.dx = -catcher.speed;
+                } else {
+                    catcher.dx = catcher.speed;
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault(); // Prevent default touch behavior
+            if (gameRunning && !gamePaused) {
+                catcher.dx = 0; // Stop movement when touch ends
+            }
+        }, { passive: false });
+        // --- End Touch Controls ---
 
         // --- Message Box Functions (for alerts/prompts) ---
         function showMessage(msg) {
