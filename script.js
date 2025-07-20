@@ -478,14 +478,9 @@ canvas.addEventListener('touchmove', (e) => {
         const deltaX = currentTouchX - initialTouchX;
 
         // Adjust catcher.dx based on swipe direction and speed
-        // A simple scaling factor can be used, or just a direct speed
-        if (deltaX > 0) { // Swiping right
-            catcher.dx = catcher.speed;
-        } else if (deltaX < 0) { // Swiping left
-            catcher.dx = -catcher.speed;
-        } else {
-            catcher.dx = 0;
-        }
+        // Scale deltaX to control sensitivity, and clamp to catcher.speed
+        const sensitivity = 0.5; // Adjust this value to change how fast the catcher moves with a swipe
+        catcher.dx = Math.max(-catcher.speed, Math.min(catcher.speed, deltaX * sensitivity));
         
         // Update initialTouchX for continuous movement
         initialTouchX = currentTouchX;
