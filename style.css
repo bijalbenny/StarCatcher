@@ -1,0 +1,179 @@
+/* Custom styles for the game */
+body {
+    font-family: "Inter", sans-serif;
+    background-color: #f0f4f8; /* Light blue-gray background fallback */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    /* Removed overflow: hidden; to allow scrolling if content overflows */
+    /* Added background GIF */
+    background-image: url('https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZW9rbjgyazh1cTYwamIyemt2dmhrbWhyMGpkZGsxc2hpM3owMGdvcyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/U3qYN8S0j3bpK/giphy.gif'); /* Space GIF */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed; /* Keep background fixed while scrolling */
+}
+canvas {
+    background-color: #a7d9ff; /* Sky blue background for canvas */
+    border-radius: 1rem; /* Rounded corners for the canvas */
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15); /* Soft shadow */
+    display: block;
+    width: 100%; /* Make canvas responsive */
+    max-width: 800px; /* Max width for desktop */
+    height: auto; /* Maintain aspect ratio */
+    aspect-ratio: 4/3; /* Standard game aspect ratio */
+}
+.game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background-color: #ffffff;
+    border-radius: 1.5rem;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+    max-width: 90%; /* Responsive container width */
+    /* Added max-height and overflow-y for responsive content */
+    max-height: 95vh; /* Limit height to prevent overflow on very small screens */
+    overflow-y: auto; /* Enable vertical scrolling if content exceeds max-height */
+}
+.control-group {
+    display: flex;
+    flex-wrap: wrap; /* Allow controls to wrap on small screens */
+    gap: 1rem;
+    justify-content: center;
+    align-items: center;
+}
+/* START Button Styles Optimization for better text fit and aesthetics */
+button {
+    padding: 0.9rem 2rem; /* Increased padding */
+    border-radius: 1rem; /* More rounded corners */
+    font-weight: bold;
+    transition: all 0.25s ease-in-out; /* Smoother transition */
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.18); /* Stronger initial shadow */
+    border: none;
+    cursor: pointer; /* Indicate clickable */
+    letter-spacing: 0.05em; /* Increased letter spacing */
+    text-transform: uppercase; /* Uppercase text */
+    font-size: 1.05rem; /* Slightly larger font */
+    min-width: 160px; /* Ensure enough width for "Play Again?" */
+}
+button:hover {
+    transform: translateY(-4px) scale(1.03); /* More pronounced lift and slight scale */
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25); /* Stronger hover shadow */
+}
+button:active {
+    transform: translateY(0) scale(0.97); /* Press down effect */
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); /* Smaller active shadow */
+}
+.btn-primary {
+    background-color: #2ECC71; /* Brighter Green */
+    color: white;
+    border: 2px solid #27AE60; /* More defined border */
+    background-image: linear-gradient(to bottom right, #2ECC71, #27AE60); /* Subtle gradient */
+}
+.btn-primary:hover {
+    background-color: #27AE60; /* Darker green on hover */
+    background-image: linear-gradient(to bottom right, #27AE60, #2ECC71); /* Reverse gradient on hover */
+}
+.btn-gemini { /* Style for Gemini API buttons */
+    background-color: #8E44AD; /* Darker Purple */
+    color: white;
+    border: 2px solid #7D3C98;
+    background-image: linear-gradient(to bottom right, #8E44AD, #7D3C98);
+}
+.btn-gemini:hover {
+    background-color: #7D3C98;
+    background-image: linear-gradient(to bottom right, #7D3C98, #8E44AD);
+}
+/* END Button Styles Optimization */
+
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 100px; /* Fixed width for sliders */
+    height: 8px;
+    background: #d3d3d3;
+    outline: none;
+    opacity: 0.7;
+    transition: opacity .2s;
+    border-radius: 4px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); /* Inner shadow for depth */
+}
+input[type="range"]:hover {
+    opacity: 1;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px; /* Slightly larger thumb */
+    height: 24px; /* Slightly larger thumb */
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); /* More prominent thumb shadow */
+    border: 2px solid #fff; /* White border for distinction */
+}
+input[type="range"]::-moz-range-thumb {
+    width: 24px; /* Slightly larger thumb */
+    height: 24px; /* Slightly larger thumb */
+    background: #4CAF50;
+    cursor: pointer;
+    border-radius: 50%;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3); /* More prominent thumb shadow */
+    border: 2px solid #fff; /* White border for distinction */
+}
+label {
+    font-size: 0.9rem;
+    color: #4a5568;
+    font-weight: 500;
+}
+#message-box {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    margin-top: 1rem;
+    text-align: center;
+    font-weight: 600;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    /* display: none; */ /* Hidden by default, controlled by JS */
+}
+.loading-spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: #673AB7;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+/* Styles for floating score/life changes */
+.score-feedback {
+    position: absolute;
+    font-size: 1.5rem;
+    font-weight: bold;
+    opacity: 0;
+    animation: fadeUp 1s forwards;
+    pointer-events: none; /* Allow clicks to pass through */
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+}
+.score-positive {
+    color: #4CAF50; /* Green */
+}
+.score-negative {
+    color: #f44336; /* Red */
+}
+@keyframes fadeUp {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-50px); opacity: 0; }
+}
