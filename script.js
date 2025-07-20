@@ -376,8 +376,8 @@ function updateStars() {
             stars.splice(i, 1); // Remove caught item
         } else if (item.y > canvas.height) {
             // Item missed the catcher and went off-screen
-            // Only lose a life if a star is missed. Bombs falling off-screen do not reduce lives.
-            if (gameRunning && (item.type === 'star')) { // Modified condition
+            // Only lose a life if a star is missed. Bombs and power-ups falling off-screen do not reduce lives.
+            if (gameRunning && (item.type === 'star')) { // Corrected condition
                 if (lives > 0) {
                     lives = Math.max(0, lives - 1); // Ensure lives don't go below 0
                     livesDisplay.textContent = lives;
@@ -445,10 +445,8 @@ function animate() {
 
 // --- Game State Management ---
 function startGame() {
-    // If the game is already running, it's a restart.
-    if (gameRunning) {
-        resetGame(); // Fully reset the game state
-    }
+    // Always reset the game state when starting a new game or playing again
+    resetGame(); 
     
     gameRunning = true;
     hideMessage(); // Hide message box when game starts
